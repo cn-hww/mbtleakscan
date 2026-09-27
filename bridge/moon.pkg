@@ -1,0 +1,11 @@
+import {
+  "cn-hww/mbtleakscan/engine",
+}
+
+pkgtype(kind: "foreign_library")
+
+supported_targets = "js"
+
+options(
+  link: { "js": { "format": "esm" } },
+)

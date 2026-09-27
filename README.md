@@ -29,3 +29,24 @@ An exemption must match a rule, line and column and include a nonblank reason.
 It does not affect `redact`. Exemptions must be reviewed when source lines move.
 Unclosed key blocks are masked through the end of input. Public-key blocks are
 not credentials and are not flagged. Key bodies are not cryptographically parsed.
+# Directory checks
+
+With MoonBit and Node.js 22 or newer installed:
+
+```sh
+moon build --target js
+node tools/scan.mjs path/to/project
+npm test
+```
+
+The command emits JSON containing relative file names, rule identifiers and
+positions. Source excerpts and matched values are omitted. File names themselves
+are not anonymized: rename sensitive file names before sharing reports.
+Exit codes are 0 for a clean scan, 1 for findings, and 2 for input errors.
+An error takes precedence over findings, so unreadable input cannot silently pass.
+
+Traversal uses sorted names, ignores `.git`, `_build`, `.mooncakes`, `.moon` and
+`node_modules`, and skips symbolic links, nonregular files, files over 1 MiB and
+files containing NUL bytes. Other input must be valid UTF-8. Summary counts expose
+skipped and failed inputs; a clean result covers only the scanned files.
+The Node adapter handles filesystem access; recognition runs in the MoonBit engine.
