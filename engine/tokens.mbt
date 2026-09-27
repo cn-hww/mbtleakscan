@@ -46,7 +46,7 @@ fn finding(text : String, rule : String, offset : Int, length : Int) -> Finding 
 ///|
 /// Recognize candidates, without returning their contents. Offsets and columns
 /// use UTF-16 code units. An AWS access ID alone is not a secret access key.
-pub fn scan(text : String) -> Array[Finding] {
+fn scan_tokens(text : String) -> Array[Finding] {
   let hits : Array[Finding] = []
   let mut index = 0
   while index < text.length() {

@@ -6,11 +6,27 @@ import {
 }
 
 // Values
+pub fn redact(String) -> String
+
+pub fn report(String, Array[Exemption]) -> String
+
+pub fn review(String, Array[Exemption]) -> Array[Finding]
+
 pub fn scan(String) -> Array[Finding]
 
 // Errors
 
 // Types and methods
+pub(all) struct Exemption {
+  rule : String
+  line : Int
+  column : Int
+  reason : String
+} derive(Eq, @debug.Debug)
+pub fn Exemption::equal(Self, Self) -> Bool
+pub fn Exemption::not_equal(Self, Self) -> Bool
+pub fn Exemption::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Finding {
   rule : String
   offset : Int
