@@ -39,6 +39,7 @@ With MoonBit and Node.js 22 or newer installed:
 ```sh
 moon build --target js
 node tools/scan.mjs path/to/project
+node tools/scan.mjs --sarif path/to/project > findings.sarif
 npm test
 ```
 
@@ -53,3 +54,7 @@ Traversal uses sorted names, ignores `.git`, `_build`, `.mooncakes`, `.moon` and
 files containing NUL bytes. Other input must be valid UTF-8. Summary counts expose
 skipped and failed inputs; a clean result covers only the scanned files.
 The Node adapter handles filesystem access; recognition runs in the MoonBit engine.
+
+`--sarif` emits SARIF 2.1.0 with relative file locations, rule IDs and fixed
+redacted messages. The exit codes are the same as for JSON output. Review the
+report before uploading it because file names and line numbers remain visible.

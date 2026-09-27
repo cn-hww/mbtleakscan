@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const cli = new URL('./scan.mjs', import.meta.url);
-function run(path) {
-  return spawnSync(process.execPath, [fileURLToPath(cli), path], { encoding: 'utf8' });
+function run(...args) {
+  return spawnSync(process.execPath, [fileURLToPath(cli), ...args], { encoding: 'utf8' });
 }
 
 test('reports positions in stable order without source values or absolute paths', async () => {
@@ -29,6 +29,25 @@ test('reports positions in stable order without source values or absolute paths'
     assert.deepEqual(report.findings.map(x => x.file), ['a.txt', 'z.txt']);
     assert.equal(report.findings[0].column, 7);
     assert.deepEqual(report.stats, { scanned: 2, skipped: 2, errors: 0 });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('SARIF includes locations and rule identifiers but no matched content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'glpat-' + 'a'.repeat(20);
+  try {
+    await writeFile(join(root, 'sample.txt'), 'first\n' + secret);
+    const result = run('--sarif', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(result.stdout.includes(root), false);
+    const sarif = JSON.parse(result.stdout);
+    assert.equal(sarif.version, '2.1.0');
+    assert.deepEqual(sarif.runs[0].tool.driver.rules, [{ id: 'gitlab-access-token' }]);
+    assert.equal(sarif.runs[0].results[0].locations[0].physicalLocation.artifactLocation.uri, 'sample.txt');
+    assert.deepEqual(sarif.runs[0].results[0].locations[0].physicalLocation.region, { startLine: 2, startColumn: 1 });
+    assert.equal(sarif.runs[0].invocations[0].executionSuccessful, true);
+    assert.equal(run('--unknown', root).status, 2);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
