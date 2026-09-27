@@ -94,6 +94,26 @@ test('clean input succeeds; invalid UTF-8 and missing input fail closed', async 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('fail-on-skip marks partial scans as incomplete in JSON and SARIF', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  try {
+    await writeFile(join(root, 'clean.txt'), 'hello');
+    await writeFile(join(root, 'binary.bin'), Buffer.from([0, 1, 2]));
+    assert.equal(run(root).status, 0);
+    let result = run('--fail-on-skip', root);
+    assert.equal(result.status, 2, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).stats, { scanned: 1, skipped: 1, errors: 0, exempted: 0 });
+    result = run('--sarif', '--fail-on-skip', root);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stdout).runs[0].invocations[0].executionSuccessful, false);
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'binary.bin', 'clean.txt']).status, 0);
+    result = run('--staged', '--fail-on-skip', root);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.skipped, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('tracked mode scans Git index paths and excludes untracked files', async () => {
   const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
   const secret = 'ghp_' + 'a'.repeat(36);

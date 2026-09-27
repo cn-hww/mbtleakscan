@@ -46,6 +46,7 @@ node tools/scan.mjs --exemptions exceptions.json path/to/project
 node tools/scan.mjs --tracked path/to/git/repository
 node tools/scan.mjs --staged path/to/git/repository
 node tools/scan.mjs --staged --changed path/to/git/repository
+node tools/scan.mjs --staged --changed --fail-on-skip path/to/git/repository
 npm test
 ```
 
@@ -60,6 +61,11 @@ Traversal uses sorted names, ignores `.git`, `_build`, `.mooncakes`, `.moon` and
 files containing NUL bytes. Other input must be valid UTF-8. Summary counts expose
 skipped and failed inputs; a clean result covers only the scanned files.
 The Node adapter handles filesystem access; recognition runs in the MoonBit engine.
+
+Use `--fail-on-skip` for CI checks that require every selected file to be scanned.
+If a symbolic link, oversized file, binary file or nonregular entry is skipped,
+the command returns exit code 2 and marks the SARIF invocation unsuccessful.
+The JSON summary still reports how many files were skipped.
 
 `--tracked` scans paths in the Git index from the given repository directory.
 It excludes untracked files and fails if Git cannot list the index. File contents

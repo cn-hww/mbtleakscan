@@ -11,6 +11,7 @@ let sarif = false;
 let tracked = false;
 let staged = false;
 let changed = false;
+let failOnSkip = false;
 let exemptionPath;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
@@ -18,6 +19,7 @@ for (let index = 0; index < args.length; index++) {
   else if (args[index] === '--tracked') tracked = true;
   else if (args[index] === '--staged') staged = true;
   else if (args[index] === '--changed') changed = true;
+  else if (args[index] === '--fail-on-skip') failOnSkip = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else paths.push(args[index]);
 }
@@ -158,7 +160,7 @@ async function visitTracked() {
 if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
@@ -185,6 +187,7 @@ if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(ar
     process.stderr.write('Unused exemption entry\n');
     stats.errors++;
   }
+  const incomplete = stats.errors > 0 || failOnSkip && stats.skipped > 0;
   const output = sarif ? {
     version: '2.1.0',
     $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
@@ -199,9 +202,9 @@ if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(ar
           region: { startLine: hit.line, startColumn: hit.column },
         } }],
       })),
-      invocations: [{ executionSuccessful: stats.errors === 0 }],
+      invocations: [{ executionSuccessful: !incomplete }],
     }],
   } : { findings: visible, stats: { ...stats, exempted: findings.length - visible.length } };
   if (process.exitCode !== 2) process.stdout.write(JSON.stringify(output) + '\n');
-  process.exitCode = process.exitCode === 2 || stats.errors ? 2 : visible.length ? 1 : 0;
+  process.exitCode = process.exitCode === 2 || incomplete ? 2 : visible.length ? 1 : 0;
 }
