@@ -3,10 +3,13 @@
 Find suspected credentials before code leaves your machine. The MoonBit engine
 returns rule names and positions, never the matched value.
 
-Current recognizers cover GitHub token prefixes, AWS access key IDs and PEM
+Current recognizers cover GitHub token prefixes, GitLab `glpat-` access tokens,
+AWS access key IDs and PEM
 private-key blocks (including unclosed blocks). These
 are syntax-based candidates, not proof that a credential is valid. AWS access
 IDs are identifiers; their corresponding secret keys are not detected yet.
+GitLab recognition uses its default prefix and a 20-character ASCII body;
+installations with a custom prefix are outside this rule.
 
 ```sh
 moon run trial --target wasm-gc

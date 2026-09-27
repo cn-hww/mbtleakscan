@@ -30,3 +30,17 @@ test "find adjacent candidates once each" {
   assert_eq(hits.length(), 2)
   assert_eq(hits[1].rule, "aws-access-id")
 }
+
+///|
+test "recognize GitLab token candidates with exact body length" {
+  let candidate = "glpat-" + "aB_2-".repeat(4)
+  let hits = @engine.scan("value=" + candidate)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "gitlab-access-token")
+  assert_eq(hits[0].offset, 6)
+  assert_eq(hits[0].length, 26)
+  assert_eq(@engine.redact(candidate), "[REDACTED]")
+  assert_eq(@engine.scan("x" + candidate), [])
+  assert_eq(@engine.scan(candidate + "A"), [])
+  assert_eq(@engine.scan("glpat-" + "a".repeat(19)), [])
+}

@@ -23,6 +23,11 @@ fn word(unit : UInt16) -> Bool {
 }
 
 ///|
+fn gitlab_body(unit : UInt16) -> Bool {
+  word(unit) || unit.to_int() == 45
+}
+
+///|
 fn starts_at(text : String, offset : Int, prefix : String) -> Bool {
   offset + prefix.length() <= text.length() &&
   text[offset:offset + prefix.length()].to_owned() == prefix
@@ -67,12 +72,21 @@ fn scan_tokens(text : String) -> Array[Finding] {
       prefix = text[index:index + 4].to_owned()
       rule = "aws-access-id"
     }
+    if starts_at(text, index, "glpat-") {
+      prefix = "glpat-"
+      rule = "gitlab-access-token"
+    }
     if prefix.length() == 0 {
       index += 1
       continue
     }
     let mut end = index + prefix.length()
-    while end < text.length() && word(text.code_units()[end]) {
+    while end < text.length() &&
+          (if rule == "gitlab-access-token" {
+            gitlab_body(text.code_units()[end])
+          } else {
+            word(text.code_units()[end])
+          }) {
       end += 1
     }
     let body_length = end - index - prefix.length()
@@ -87,6 +101,9 @@ fn scan_tokens(text : String) -> Array[Finding] {
           accepted = false
         }
       }
+    }
+    if rule == "gitlab-access-token" && body_length == 20 {
+      accepted = true
     }
     if accepted {
       hits.push(finding(text, rule, index, end - index))
