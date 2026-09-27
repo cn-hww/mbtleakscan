@@ -62,3 +62,15 @@ test "find AWS secret values only in an assignment context" {
   assert_eq(@engine.scan("aws_secret_access_key='" + value + "\n"), [])
   assert_eq(@engine.scan("aws_secret_access_key=" + "_".repeat(40)), [])
 }
+
+///|
+test "overlapping rules produce a single complete redaction" {
+  let value = "aB3+/".repeat(8)
+  let source = "-----BEGIN PRIVATE KEY-----\naws_secret_access_key=" +
+    value +
+    "\n-----END PRIVATE KEY-----"
+  let hits = @engine.scan(source)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "private-key-block")
+  assert_eq(@engine.redact(source), "[REDACTED]")
+}

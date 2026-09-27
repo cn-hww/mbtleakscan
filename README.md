@@ -42,6 +42,7 @@ With MoonBit and Node.js 22 or newer installed:
 moon build --target js
 node tools/scan.mjs path/to/project
 node tools/scan.mjs --sarif path/to/project > findings.sarif
+node tools/scan.mjs --exemptions exceptions.json path/to/project
 npm test
 ```
 
@@ -60,3 +61,12 @@ The Node adapter handles filesystem access; recognition runs in the MoonBit engi
 `--sarif` emits SARIF 2.1.0 with relative file locations, rule IDs and fixed
 redacted messages. The exit codes are the same as for JSON output. Review the
 report before uploading it because file names and line numbers remain visible.
+
+An optional exemption file has the form below. Each entry needs an exact relative
+file name, rule, line and column, plus a nonblank reason. Unknown fields,
+duplicates, malformed files and unused entries fail the scan with exit code 2.
+Exemptions affect both JSON and SARIF reports; source values remain untouched.
+
+```json
+{"exemptions":[{"file":"sample.txt","rule":"github-token","line":3,"column":7,"reason":"synthetic test fixture"}]}
+```

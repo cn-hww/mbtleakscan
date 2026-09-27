@@ -28,7 +28,36 @@ test('reports positions in stable order without source values or absolute paths'
     const report = JSON.parse(result.stdout);
     assert.deepEqual(report.findings.map(x => x.file), ['a.txt', 'z.txt']);
     assert.equal(report.findings[0].column, 7);
-    assert.deepEqual(report.stats, { scanned: 2, skipped: 2, errors: 0 });
+    assert.deepEqual(report.stats, { scanned: 2, skipped: 2, errors: 0, exempted: 0 });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('justified exemptions suppress exact matches; stale entries fail', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'ghp_' + 'a'.repeat(36);
+  const exemptionFile = join(root, 'exceptions.json');
+  try {
+    await writeFile(join(root, 'source.txt'), secret + '\n' + secret);
+    const entry = { file: 'source.txt', rule: 'github-token', line: 1, column: 1, reason: 'synthetic fixture' };
+    await writeFile(exemptionFile, JSON.stringify({ exemptions: [entry] }));
+    let result = run('--exemptions', exemptionFile, root);
+    assert.equal(result.status, 1, result.stderr);
+    let report = JSON.parse(result.stdout);
+    assert.equal(report.findings.length, 1);
+    assert.equal(report.findings[0].line, 2);
+    assert.equal(report.stats.exempted, 1);
+    assert.equal(result.stdout.includes(secret), false);
+    result = run('--sarif', '--exemptions', exemptionFile, root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(JSON.parse(result.stdout).runs[0].results.length, 1);
+    await writeFile(exemptionFile, JSON.stringify({ exemptions: [{ ...entry, line: 3 }] }));
+    result = run('--exemptions', exemptionFile, root);
+    assert.equal(result.status, 2);
+    assert.equal(result.stderr.includes(secret), false);
+    await writeFile(exemptionFile, JSON.stringify({ exemptions: [{ ...entry, reason: ' ' }] }));
+    result = run('--exemptions', exemptionFile, root);
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout, '');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
