@@ -43,6 +43,7 @@ moon build --target js
 node tools/scan.mjs path/to/project
 node tools/scan.mjs --sarif path/to/project > findings.sarif
 node tools/scan.mjs --exemptions exceptions.json path/to/project
+node tools/scan.mjs --tracked path/to/git/repository
 npm test
 ```
 
@@ -57,6 +58,11 @@ Traversal uses sorted names, ignores `.git`, `_build`, `.mooncakes`, `.moon` and
 files containing NUL bytes. Other input must be valid UTF-8. Summary counts expose
 skipped and failed inputs; a clean result covers only the scanned files.
 The Node adapter handles filesystem access; recognition runs in the MoonBit engine.
+
+`--tracked` scans paths in the Git index from the given repository directory.
+It excludes untracked files and fails if Git cannot list the index. File contents
+come from the working tree, so staged content that differs from the working tree
+requires a separate scan. Symbolic links remain skipped.
 
 `--sarif` emits SARIF 2.1.0 with relative file locations, rule IDs and fixed
 redacted messages. The exit codes are the same as for JSON output. Review the

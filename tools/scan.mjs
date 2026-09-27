@@ -1,15 +1,19 @@
 import { readdir, readFile, lstat } from 'node:fs/promises';
 import { resolve, relative, join, sep } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { scan_json } from '../_build/js/debug/build/bridge/bridge.js';
 
 const ignored = new Set(['.git', '_build', '.mooncakes', 'node_modules', '.moon']);
 const limit = 1024 * 1024;
 const args = process.argv.slice(2);
 let sarif = false;
+let tracked = false;
 let exemptionPath;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--sarif') sarif = true;
+  else if (args[index] === '--tracked') tracked = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else paths.push(args[index]);
 }
@@ -37,11 +41,12 @@ async function loadExemptions(path) {
   return data.exemptions;
 }
 
-async function visit(path) {
+async function visit(path, allowDirectory = true) {
   try {
     const info = await lstat(path);
     if (info.isSymbolicLink()) { stats.skipped++; return; }
     if (info.isDirectory()) {
+      if (!allowDirectory) { stats.errors++; return; }
       const entries = (await readdir(path)).sort();
       for (const name of entries) {
         if (!ignored.has(name)) await visit(join(path, name));
@@ -61,10 +66,38 @@ async function visit(path) {
   }
 }
 
+async function visitTracked() {
+  try {
+    if (!(await lstat(root)).isDirectory()) throw Error();
+    const { stdout } = await promisify(execFile)('git', ['ls-files', '-z', '--cached'], {
+      cwd: root, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024,
+    });
+    const names = [...new Set(decoder.decode(stdout).split('\0').filter(Boolean))].sort();
+    for (const name of names) {
+      const parts = name.split('/');
+      if (parts.some(part => !part || part === '.' || part === '..' || part.includes('\\'))) {
+        stats.errors++;
+        continue;
+      }
+      let current = root;
+      let safe = true;
+      for (const part of parts.slice(0, -1)) {
+        current = join(current, part);
+        const info = await lstat(current);
+        if (!info.isDirectory() || info.isSymbolicLink()) { safe = false; break; }
+      }
+      if (safe) await visit(join(root, ...parts), false);
+      else stats.skipped++;
+    }
+  } catch {
+    stats.errors++;
+  }
+}
+
 if (paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
@@ -74,7 +107,10 @@ if (paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     process.stderr.write('Invalid exemption file\n');
     process.exitCode = 2;
   }
-  if (process.exitCode !== 2) await visit(root);
+  if (process.exitCode !== 2) {
+    if (tracked) await visitTracked();
+    else await visit(root);
+  }
   const used = new Set();
   const visible = findings.filter(hit => {
     const index = exemptions.findIndex(entry => entry.file === hit.file && entry.rule === hit.rule &&

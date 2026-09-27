@@ -93,3 +93,23 @@ test('clean input succeeds; invalid UTF-8 and missing input fail closed', async 
     assert.equal(missing.stdout.includes(root), false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('tracked mode scans Git index paths and excludes untracked files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'ghp_' + 'a'.repeat(36);
+  try {
+    await writeFile(join(root, 'clean.txt'), 'hello');
+    await writeFile(join(root, 'untracked.txt'), secret);
+    assert.equal(run('--tracked', root).status, 2);
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'clean.txt']).status, 0);
+    let result = run('--tracked', root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).stats, { scanned: 1, skipped: 0, errors: 0, exempted: 0 });
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'untracked.txt']).status, 0);
+    result = run('--tracked', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['untracked.txt']);
+    assert.equal(result.stdout.includes(secret), false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
