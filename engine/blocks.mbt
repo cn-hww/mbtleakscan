@@ -23,7 +23,7 @@ fn scan_blocks(text : String) -> Array[Finding] {
         } else {
           "private-key-unclosed"
         }
-        hits.push(finding(text, rule, index, end - index))
+        hits.push(finding(rule, index, end - index))
         index = end
         matched = true
         break
@@ -57,5 +57,28 @@ pub fn scan(text : String) -> Array[Finding] {
     }
   }
   hits.sort_by(fn(left, right) { left.offset.compare(right.offset) })
-  hits
+  let positioned : Array[Finding] = []
+  let units = text.code_units()
+  let mut cursor = 0
+  let mut line = 1
+  let mut column = 1
+  for hit in hits {
+    for index in cursor..<hit.offset {
+      if units[index].to_int() == 10 {
+        line += 1
+        column = 1
+      } else {
+        column += 1
+      }
+    }
+    positioned.push({
+      rule: hit.rule,
+      offset: hit.offset,
+      length: hit.length,
+      line,
+      column,
+    })
+    cursor = hit.offset
+  }
+  positioned
 }

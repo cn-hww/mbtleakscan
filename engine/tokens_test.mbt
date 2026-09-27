@@ -74,3 +74,18 @@ test "overlapping rules produce a single complete redaction" {
   assert_eq(hits[0].rule, "private-key-block")
   assert_eq(@engine.redact(source), "[REDACTED]")
 }
+
+///|
+test "many findings retain their own line and UTF-16 column" {
+  let source = StringBuilder()
+  let token = "ghp_" + "a".repeat(36)
+  for _ in 0..<120 {
+    source.write_string("😀 " + token + "\r\n")
+  }
+  let hits = @engine.scan(source.to_string())
+  assert_eq(hits.length(), 120)
+  for index in 0..<120 {
+    assert_eq(hits[index].line, index + 1)
+    assert_eq(hits[index].column, 4)
+  }
+}

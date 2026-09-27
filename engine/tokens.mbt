@@ -50,18 +50,8 @@ fn starts_at(text : String, offset : Int, prefix : String) -> Bool {
 }
 
 ///|
-fn finding(text : String, rule : String, offset : Int, length : Int) -> Finding {
-  let mut line = 1
-  let mut column = 1
-  for index in 0..<offset {
-    if text.code_units()[index].to_int() == 10 {
-      line += 1
-      column = 1
-    } else {
-      column += 1
-    }
-  }
-  { rule, offset, length, line, column, }
+fn finding(rule : String, offset : Int, length : Int) -> Finding {
+  { rule, offset, length, line: 0, column: 0, }
 }
 
 ///|
@@ -122,7 +112,7 @@ fn scan_tokens(text : String) -> Array[Finding] {
       accepted = true
     }
     if accepted {
-      hits.push(finding(text, rule, index, end - index))
+      hits.push(finding(rule, index, end - index))
     }
     index = end
   }
@@ -180,7 +170,7 @@ fn scan_aws_secret_assignments(text : String) -> Array[Finding] {
         quote == 0 ||
         (cursor < text.length() && units[cursor].to_int() == quote)
       ) {
-      hits.push(finding(text, "aws-secret-access-key", begin, 40))
+      hits.push(finding("aws-secret-access-key", begin, 40))
     }
     index = cursor + 1
   }
