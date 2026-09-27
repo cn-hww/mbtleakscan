@@ -44,3 +44,21 @@ test "recognize GitLab token candidates with exact body length" {
   assert_eq(@engine.scan(candidate + "A"), [])
   assert_eq(@engine.scan("glpat-" + "a".repeat(19)), [])
 }
+
+///|
+test "find AWS secret values only in an assignment context" {
+  let value = "aB3+/".repeat(8)
+  let source = "aws_secret_access_key = " + value + "\n"
+  let hits = @engine.scan(source)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "aws-secret-access-key")
+  assert_eq(hits[0].column, 25)
+  assert_eq(@engine.redact(source), "aws_secret_access_key = [REDACTED]\n")
+  let quoted = @engine.scan("AWS_SECRET_ACCESS_KEY: '" + value + "'")
+  assert_eq(quoted.length(), 1)
+  assert_eq(@engine.scan(value), [])
+  assert_eq(@engine.scan("not_aws_secret_access_key=" + value), [])
+  assert_eq(@engine.scan("aws_secret_access_key=" + value + "A"), [])
+  assert_eq(@engine.scan("aws_secret_access_key='" + value + "\n"), [])
+  assert_eq(@engine.scan("aws_secret_access_key=" + "_".repeat(40)), [])
+}

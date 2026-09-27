@@ -28,6 +28,22 @@ fn gitlab_body(unit : UInt16) -> Bool {
 }
 
 ///|
+fn aws_secret_body(unit : UInt16) -> Bool {
+  let n = unit.to_int()
+  (n >= 48 && n <= 57) ||
+  (n >= 65 && n <= 90) ||
+  (n >= 97 && n <= 122) ||
+  n == 43 ||
+  n == 47
+}
+
+///|
+fn horizontal_space(unit : UInt16) -> Bool {
+  let n = unit.to_int()
+  n == 32 || n == 9
+}
+
+///|
 fn starts_at(text : String, offset : Int, prefix : String) -> Bool {
   offset + prefix.length() <= text.length() &&
   text[offset:offset + prefix.length()].to_owned() == prefix
@@ -109,6 +125,64 @@ fn scan_tokens(text : String) -> Array[Finding] {
       hits.push(finding(text, rule, index, end - index))
     }
     index = end
+  }
+  hits
+}
+
+///|
+/// Match only values assigned to the documented AWS secret key setting.
+fn scan_aws_secret_assignments(text : String) -> Array[Finding] {
+  let hits : Array[Finding] = []
+  let units = text.code_units()
+  let mut index = 0
+  while index < text.length() {
+    let mut key = ""
+    for candidate in ["aws_secret_access_key", "AWS_SECRET_ACCESS_KEY"] {
+      if starts_at(text, index, candidate) {
+        key = candidate
+        break
+      }
+    }
+    if key.length() == 0 ||
+      (index > 0 && word(units[index - 1])) ||
+      (
+        index + key.length() < text.length() &&
+        word(units[index + key.length()])
+      ) {
+      index += 1
+      continue
+    }
+    let mut cursor = index + key.length()
+    while cursor < text.length() && horizontal_space(units[cursor]) {
+      cursor += 1
+    }
+    if cursor == text.length() ||
+      (units[cursor].to_int() != 61 && units[cursor].to_int() != 58) {
+      index += 1
+      continue
+    }
+    cursor += 1
+    while cursor < text.length() && horizontal_space(units[cursor]) {
+      cursor += 1
+    }
+    let mut quote = 0
+    if cursor < text.length() &&
+      (units[cursor].to_int() == 34 || units[cursor].to_int() == 39) {
+      quote = units[cursor].to_int()
+      cursor += 1
+    }
+    let begin = cursor
+    while cursor < text.length() && aws_secret_body(units[cursor]) {
+      cursor += 1
+    }
+    if cursor - begin == 40 &&
+      (
+        quote == 0 ||
+        (cursor < text.length() && units[cursor].to_int() == quote)
+      ) {
+      hits.push(finding(text, "aws-secret-access-key", begin, 40))
+    }
+    index = cursor + 1
   }
   hits
 }

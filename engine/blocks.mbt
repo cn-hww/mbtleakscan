@@ -39,7 +39,11 @@ fn scan_blocks(text : String) -> Array[Finding] {
 ///|
 pub fn scan(text : String) -> Array[Finding] {
   let hits = scan_blocks(text)
-  for token in scan_tokens(text) {
+  let candidates = scan_tokens(text)
+  for secret in scan_aws_secret_assignments(text) {
+    candidates.push(secret)
+  }
+  for token in candidates {
     let mut covered = false
     for block in hits {
       if token.offset >= block.offset &&
