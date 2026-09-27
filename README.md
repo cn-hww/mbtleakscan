@@ -44,6 +44,7 @@ node tools/scan.mjs path/to/project
 node tools/scan.mjs --sarif path/to/project > findings.sarif
 node tools/scan.mjs --exemptions exceptions.json path/to/project
 node tools/scan.mjs --tracked path/to/git/repository
+node tools/scan.mjs --staged path/to/git/repository
 npm test
 ```
 
@@ -63,6 +64,11 @@ The Node adapter handles filesystem access; recognition runs in the MoonBit engi
 It excludes untracked files and fails if Git cannot list the index. File contents
 come from the working tree, so staged content that differs from the working tree
 requires a separate scan. Symbolic links remain skipped.
+
+`--staged` reads regular-file blobs from the Git index, including files changed
+or removed in the working tree after staging. It excludes untracked files and
+reports unresolved index entries as errors. Oversize and binary blobs are skipped
+and counted. `--tracked` and `--staged` are mutually exclusive.
 
 `--sarif` emits SARIF 2.1.0 with relative file locations, rule IDs and fixed
 redacted messages. The exit codes are the same as for JSON output. Review the

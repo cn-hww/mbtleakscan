@@ -9,11 +9,13 @@ const limit = 1024 * 1024;
 const args = process.argv.slice(2);
 let sarif = false;
 let tracked = false;
+let staged = false;
 let exemptionPath;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--sarif') sarif = true;
   else if (args[index] === '--tracked') tracked = true;
+  else if (args[index] === '--staged') staged = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else paths.push(args[index]);
 }
@@ -41,6 +43,13 @@ async function loadExemptions(path) {
   return data.exemptions;
 }
 
+function scanBytes(bytes, file) {
+  if (bytes.length > limit || bytes.includes(0)) { stats.skipped++; return; }
+  const source = decoder.decode(bytes);
+  for (const hit of JSON.parse(scan_json(source))) findings.push({ file, ...hit });
+  stats.scanned++;
+}
+
 async function visit(path, allowDirectory = true) {
   try {
     const info = await lstat(path);
@@ -55,12 +64,47 @@ async function visit(path, allowDirectory = true) {
     }
     if (!info.isFile() || info.size > limit) { stats.skipped++; return; }
     const bytes = await readFile(path);
-    if (bytes.length > limit || bytes.includes(0)) { stats.skipped++; return; }
-    const source = decoder.decode(bytes);
-    const hits = JSON.parse(scan_json(source));
     const file = relative(root, path).split(sep).join('/') || '.';
-    for (const hit of hits) findings.push({ file, ...hit });
-    stats.scanned++;
+    scanBytes(bytes, file);
+  } catch {
+    stats.errors++;
+  }
+}
+
+async function visitStaged() {
+  try {
+    if (!(await lstat(root)).isDirectory()) throw Error();
+    const git = promisify(execFile);
+    const { stdout } = await git('git', ['ls-files', '--stage', '-z'], {
+      cwd: root, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024,
+    });
+    const entries = decoder.decode(stdout).split('\0').filter(Boolean).sort((a, b) => {
+      const left = a.slice(a.indexOf('\t') + 1);
+      const right = b.slice(b.indexOf('\t') + 1);
+      return left < right ? -1 : left > right ? 1 : 0;
+    });
+    for (const entry of entries) {
+      try {
+        const tab = entry.indexOf('\t');
+        if (tab < 0) throw Error();
+        const [mode, hash, stage] = entry.slice(0, tab).split(' ');
+        const file = entry.slice(tab + 1);
+        if (!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(hash) || stage !== '0' ||
+            !file || file.startsWith('/') ||
+            file.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\'))) throw Error();
+        if (mode !== '100644' && mode !== '100755') { stats.skipped++; continue; }
+        const { stdout: sizeText } = await git('git', ['cat-file', '-s', hash], { cwd: root });
+        const size = Number(sizeText.trim());
+        if (!Number.isSafeInteger(size) || size < 0) throw Error();
+        if (size > limit) { stats.skipped++; continue; }
+        const { stdout: bytes } = await git('git', ['cat-file', 'blob', hash], {
+          cwd: root, encoding: 'buffer', maxBuffer: limit + 1024,
+        });
+        scanBytes(bytes, file);
+      } catch {
+        stats.errors++;
+      }
+    }
   } catch {
     stats.errors++;
   }
@@ -94,10 +138,10 @@ async function visitTracked() {
   }
 }
 
-if (paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
+if (tracked && staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked | --staged] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
@@ -108,7 +152,8 @@ if (paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     process.exitCode = 2;
   }
   if (process.exitCode !== 2) {
-    if (tracked) await visitTracked();
+    if (staged) await visitStaged();
+    else if (tracked) await visitTracked();
     else await visit(root);
   }
   const used = new Set();

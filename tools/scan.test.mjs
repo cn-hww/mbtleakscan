@@ -113,3 +113,25 @@ test('tracked mode scans Git index paths and excludes untracked files', async ()
     assert.equal(result.stdout.includes(secret), false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('staged mode reads index blobs even after working tree changes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'glpat-' + 'a'.repeat(20);
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    await writeFile(join(root, 'sample.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'sample.txt']).status, 0);
+    await writeFile(join(root, 'sample.txt'), 'safe working copy');
+    let result = run('--staged', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['sample.txt']);
+    assert.equal(run('--tracked', root).status, 0);
+    await rm(join(root, 'sample.txt'));
+    result = run('--staged', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.scanned, 1);
+    assert.equal(run('--tracked', root).status, 2);
+    assert.equal(run('--staged', '--tracked', root).status, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
