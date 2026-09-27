@@ -133,5 +133,34 @@ test('staged mode reads index blobs even after working tree changes', async () =
     assert.equal(JSON.parse(result.stdout).stats.scanned, 1);
     assert.equal(run('--tracked', root).status, 2);
     assert.equal(run('--staged', '--tracked', root).status, 2);
+    assert.equal(run('--staged', '--changed', root).status, 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('changed mode limits staged scanning to the next commit', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'ghp_' + 'a'.repeat(36);
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    await writeFile(join(root, 'historic.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'historic.txt']).status, 0);
+    assert.equal(spawnSync('git', ['-C', root, '-c', 'user.name=Fixture',
+      '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'baseline']).status, 0);
+    await writeFile(join(root, 'next.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'next.txt']).status, 0);
+    await writeFile(join(root, 'next.txt'), 'clean working copy');
+    const all = JSON.parse(run('--staged', root).stdout);
+    assert.deepEqual(all.findings.map(hit => hit.file), ['historic.txt', 'next.txt']);
+    let result = run('--staged', '--changed', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['next.txt']);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(run('--changed', root).status, 2);
+    assert.equal(spawnSync('git', ['-C', root, 'reset', '-q', '--', 'next.txt']).status, 0);
+    result = run('--staged', '--changed', root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.scanned, 0);
+    assert.equal(spawnSync('git', ['-C', root, 'rm', '-q', 'historic.txt']).status, 0);
+    assert.equal(run('--staged', '--changed', root).status, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

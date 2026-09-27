@@ -45,6 +45,7 @@ node tools/scan.mjs --sarif path/to/project > findings.sarif
 node tools/scan.mjs --exemptions exceptions.json path/to/project
 node tools/scan.mjs --tracked path/to/git/repository
 node tools/scan.mjs --staged path/to/git/repository
+node tools/scan.mjs --staged --changed path/to/git/repository
 npm test
 ```
 
@@ -69,6 +70,11 @@ requires a separate scan. Symbolic links remain skipped.
 or removed in the working tree after staging. It excludes untracked files and
 reports unresolved index entries as errors. Oversize and binary blobs are skipped
 and counted. `--tracked` and `--staged` are mutually exclusive.
+
+Add `--changed` to scan only index paths changed from `HEAD`, using their staged
+content. This includes newly added files on a branch without commits and excludes
+deleted paths. It is useful for pre-commit checks in repositories with older
+findings. A clean changed scan describes this commit's staged files only.
 
 `--sarif` emits SARIF 2.1.0 with relative file locations, rule IDs and fixed
 redacted messages. The exit codes are the same as for JSON output. Review the

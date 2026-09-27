@@ -10,12 +10,14 @@ const args = process.argv.slice(2);
 let sarif = false;
 let tracked = false;
 let staged = false;
+let changed = false;
 let exemptionPath;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--sarif') sarif = true;
   else if (args[index] === '--tracked') tracked = true;
   else if (args[index] === '--staged') staged = true;
+  else if (args[index] === '--changed') changed = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else paths.push(args[index]);
 }
@@ -83,12 +85,27 @@ async function visitStaged() {
       const right = b.slice(b.indexOf('\t') + 1);
       return left < right ? -1 : left > right ? 1 : 0;
     });
+    if (entries.some(entry => entry.slice(0, entry.indexOf('\t')).split(' ')[2] !== '0')) {
+      stats.errors++;
+      return;
+    }
+    let changedNames;
+    if (changed) {
+      const { stdout: diff } = await git('git', [
+        'diff', '--cached', '--name-only', '--relative', '--no-renames',
+        '--diff-filter=ACMRT', '-z',
+      ], { cwd: root, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
+      changedNames = new Set(decoder.decode(diff).split('\0').filter(Boolean));
+      const indexed = new Set(entries.map(entry => entry.slice(entry.indexOf('\t') + 1)));
+      if ([...changedNames].some(name => !indexed.has(name))) throw Error();
+    }
     for (const entry of entries) {
       try {
         const tab = entry.indexOf('\t');
         if (tab < 0) throw Error();
         const [mode, hash, stage] = entry.slice(0, tab).split(' ');
         const file = entry.slice(tab + 1);
+        if (changed && !changedNames.has(file)) continue;
         if (!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(hash) || stage !== '0' ||
             !file || file.startsWith('/') ||
             file.split('/').some(part => !part || part === '.' || part === '..' || part.includes('\\'))) throw Error();
@@ -138,10 +155,10 @@ async function visitTracked() {
   }
 }
 
-if (tracked && staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
+if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked | --staged] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
