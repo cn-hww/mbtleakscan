@@ -5,7 +5,7 @@ import { promisify } from 'node:util';
 import { scan_json } from '../_build/js/debug/build/bridge/bridge.js';
 
 const ignored = new Set(['.git', '_build', '.mooncakes', 'node_modules', '.moon']);
-const limit = 1024 * 1024;
+let limit = 1024 * 1024;
 const args = process.argv.slice(2);
 let sarif = false;
 let tracked = false;
@@ -13,6 +13,7 @@ let staged = false;
 let changed = false;
 let failOnSkip = false;
 let exemptionPath;
+let maxBytesOption;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--sarif') sarif = true;
@@ -21,8 +22,14 @@ for (let index = 0; index < args.length; index++) {
   else if (args[index] === '--changed') changed = true;
   else if (args[index] === '--fail-on-skip') failOnSkip = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
+  else if (args[index] === '--max-bytes') maxBytesOption = args[++index];
   else paths.push(args[index]);
 }
+const validMaxBytes = !args.includes('--max-bytes') ||
+  typeof maxBytesOption === 'string' && /^[1-9][0-9]*$/.test(maxBytesOption) &&
+  Number.isSafeInteger(Number(maxBytesOption)) &&
+  Number(maxBytesOption) <= 8 * 1024 * 1024;
+if (validMaxBytes && maxBytesOption !== undefined) limit = Number(maxBytesOption);
 const root = resolve(paths[0] ?? '.');
 const findings = [];
 const stats = { scanned: 0, skipped: 0, errors: 0 };
@@ -157,10 +164,11 @@ async function visitTracked() {
   }
 }
 
-if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
+if (!validMaxBytes || args.filter(arg => arg === '--max-bytes').length > 1 ||
+    tracked && staged || changed && !staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];

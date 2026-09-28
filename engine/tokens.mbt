@@ -59,9 +59,10 @@ fn finding(rule : String, offset : Int, length : Int) -> Finding {
 /// use UTF-16 code units. An AWS access ID alone is not a secret access key.
 fn scan_tokens(text : String) -> Array[Finding] {
   let hits : Array[Finding] = []
+  let units = text.code_units()
   let mut index = 0
   while index < text.length() {
-    if index > 0 && word(text.code_units()[index - 1]) {
+    if index > 0 && word(units[index - 1]) {
       index += 1
       continue
     }
@@ -89,9 +90,9 @@ fn scan_tokens(text : String) -> Array[Finding] {
     let mut end = index + prefix.length()
     while end < text.length() &&
           (if rule == "gitlab-access-token" {
-            gitlab_body(text.code_units()[end])
+            gitlab_body(units[end])
           } else {
-            word(text.code_units()[end])
+            word(units[end])
           }) {
       end += 1
     }
@@ -102,7 +103,7 @@ fn scan_tokens(text : String) -> Array[Finding] {
     if rule == "aws-access-id" && body_length == 16 {
       accepted = true
       for pos in (index + 4)..<end {
-        let n = text.code_units()[pos].to_int()
+        let n = units[pos].to_int()
         if !((n >= 48 && n <= 57) || (n >= 65 && n <= 90)) {
           accepted = false
         }

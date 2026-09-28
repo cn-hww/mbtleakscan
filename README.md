@@ -47,6 +47,7 @@ node tools/scan.mjs --tracked path/to/git/repository
 node tools/scan.mjs --staged path/to/git/repository
 node tools/scan.mjs --staged --changed path/to/git/repository
 node tools/scan.mjs --staged --changed --fail-on-skip path/to/git/repository
+node tools/scan.mjs --max-bytes 2097152 path/to/project
 npm test
 ```
 
@@ -61,6 +62,11 @@ Traversal uses sorted names, ignores `.git`, `_build`, `.mooncakes`, `.moon` and
 files containing NUL bytes. Other input must be valid UTF-8. Summary counts expose
 skipped and failed inputs; a clean result covers only the scanned files.
 The Node adapter handles filesystem access; recognition runs in the MoonBit engine.
+
+The default per-file limit is 1 MiB. `--max-bytes` accepts a positive byte count
+up to 8 MiB and applies to directory, tracked and staged scans. Files above the
+chosen limit remain skipped; combine the option with `--fail-on-skip` when
+incomplete coverage must fail CI.
 
 Use `--fail-on-skip` for CI checks that require every selected file to be scanned.
 If a symbolic link, oversized file, binary file or nonregular entry is skipped,

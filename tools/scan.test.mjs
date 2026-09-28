@@ -217,3 +217,30 @@ test('changed mode ignores unrelated exemptions but checks changed locations', a
     assert.equal(result.stderr.includes(secret), false);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('max-bytes raises the limit for directory and staged scans', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'glpat-' + 'a'.repeat(20);
+  try {
+    await writeFile(join(root, 'large.txt'), 'x'.repeat(1024 * 1024) + '\n' + secret);
+    let result = run('--fail-on-skip', root);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.skipped, 1);
+    result = run('--max-bytes', '2097152', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(JSON.parse(result.stdout).findings[0].line, 2);
+    assert.equal(run('--max-bytes', '0', root).status, 2);
+    assert.equal(run('--max-bytes').status, 2);
+    assert.equal(run('--max-bytes', root, '--max-bytes').status, 2);
+    assert.equal(run('--max-bytes', '8388609', root).status, 2);
+    assert.equal(run('--max-bytes', '2', '--max-bytes', '3', root).status, 2);
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'large.txt']).status, 0);
+    result = run('--staged', '--changed', '--fail-on-skip', root);
+    assert.equal(result.status, 2, result.stderr);
+    result = run('--staged', '--changed', '--fail-on-skip', '--max-bytes', '2097152', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['large.txt']);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
