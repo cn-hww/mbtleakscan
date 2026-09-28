@@ -40,6 +40,9 @@ fn scan_blocks(text : String) -> Array[Finding] {
 pub fn scan(text : String) -> Array[Finding] {
   let hits = scan_blocks(text)
   let candidates = scan_urls(text)
+  for candidate in scan_jwts(text) {
+    candidates.push(candidate)
+  }
   for candidate in scan_aws_assignments(text) {
     candidates.push(candidate)
   }
