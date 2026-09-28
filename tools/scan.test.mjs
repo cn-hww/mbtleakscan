@@ -244,3 +244,28 @@ test('max-bytes raises the limit for directory and staged scans', async () => {
     assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['large.txt']);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('new engine rules pass through the CLI without exposing values', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const jwt = [
+    Buffer.from('{"alg":"HS256"}').toString('base64url'),
+    Buffer.from('{"sub":"synthetic"}').toString('base64url'),
+    'A'.repeat(43),
+  ].join('.');
+  const values = [
+    'https://reader:p%40ss@host.example',
+    jwt,
+    'sk_live_' + 'aB3'.repeat(10),
+    'xoxb-12345678-' + 'aBcD'.repeat(5),
+  ];
+  try {
+    await writeFile(join(root, 'sample.txt'), values.join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1, result.stderr);
+    for (const value of values) assert.equal(result.stdout.includes(value), false);
+    assert.equal(result.stdout.includes(root), false);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.rule), [
+      'url-password', 'jwt-candidate', 'stripe-secret-key', 'slack-token',
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

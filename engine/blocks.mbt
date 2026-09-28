@@ -43,6 +43,9 @@ pub fn scan(text : String) -> Array[Finding] {
   for candidate in scan_jwts(text) {
     candidates.push(candidate)
   }
+  for candidate in scan_provider_keys(text) {
+    candidates.push(candidate)
+  }
   for candidate in scan_aws_assignments(text) {
     candidates.push(candidate)
   }

@@ -4,6 +4,7 @@ Find suspected credentials before code leaves your machine. The MoonBit engine
 returns rule names and positions, never the matched value.
 
 Current recognizers cover GitHub token prefixes, GitLab `glpat-` access tokens,
+Stripe secret and restricted keys, Slack tokens,
 AWS access key IDs, assigned AWS secret access keys, assigned AWS session tokens,
 passwords in URL userinfo, compact JWT candidates, and PEM private-key
 blocks (including unclosed blocks). These
@@ -24,6 +25,10 @@ The JWT rule decodes base64url header and payload segments, requires JSON object
 and a named algorithm, and checks that the signature segment decodes. It does not
 verify signatures or token validity; unsecured and encrypted JWT forms are outside
 this rule.
+Stripe rules cover `sk_live_`, `sk_test_`, `rk_live_` and `rk_test_` with
+alphanumeric bodies of 20–256 characters. Publishable `pk_` keys are excluded.
+Slack rules cover segmented `xoxb-`, `xoxp-`, `xapp-` and `xwfp-` candidates.
+Both are syntax checks; the scanner does not contact either service.
 
 ```sh
 moon run trial --target wasm-gc
