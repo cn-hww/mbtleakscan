@@ -90,6 +90,8 @@ An optional exemption file has the form below. Each entry needs an exact relativ
 file name, rule, line and column, plus a nonblank reason. Unknown fields,
 duplicates, malformed files and unused entries fail the scan with exit code 2.
 Exemptions affect both JSON and SARIF reports; source values remain untouched.
+With `--staged --changed`, entries for unchanged files are outside the scan and
+do not count as unused. Entries for changed files still need an exact match.
 
 ```json
 {"exemptions":[{"file":"sample.txt","rule":"github-token","line":3,"column":7,"reason":"synthetic test fixture"}]}

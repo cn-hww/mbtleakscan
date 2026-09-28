@@ -27,6 +27,7 @@ const root = resolve(paths[0] ?? '.');
 const findings = [];
 const stats = { scanned: 0, skipped: 0, errors: 0 };
 const decoder = new TextDecoder('utf-8', { fatal: true });
+let changedNames;
 
 async function loadExemptions(path) {
   const data = JSON.parse(await readFile(path, 'utf8'));
@@ -91,7 +92,6 @@ async function visitStaged() {
       stats.errors++;
       return;
     }
-    let changedNames;
     if (changed) {
       const { stdout: diff } = await git('git', [
         'diff', '--cached', '--name-only', '--relative', '--no-renames',
@@ -183,7 +183,10 @@ if (tracked && staged || changed && !staged || paths.length > 1 || paths.some(ar
     used.add(index);
     return false;
   });
-  if (used.size !== exemptions.length) {
+  const required = exemptions
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => !changed || changedNames?.has(entry.file));
+  if (required.some(({ index }) => !used.has(index))) {
     process.stderr.write('Unused exemption entry\n');
     stats.errors++;
   }

@@ -184,3 +184,36 @@ test('changed mode limits staged scanning to the next commit', async () => {
     assert.equal(run('--staged', '--changed', root).status, 0);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('changed mode ignores unrelated exemptions but checks changed locations', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'ghp_' + 'a'.repeat(36);
+  const exemptionFile = join(root, 'exceptions.json');
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    await writeFile(join(root, 'historic.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'historic.txt']).status, 0);
+    assert.equal(spawnSync('git', ['-C', root, '-c', 'user.name=Fixture',
+      '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'baseline']).status, 0);
+    await writeFile(exemptionFile, JSON.stringify({ exemptions: [{
+      file: 'historic.txt', rule: 'github-token', line: 1, column: 1,
+      reason: 'synthetic fixture',
+    }] }));
+    let result = run('--staged', '--changed', '--exemptions', exemptionFile, root);
+    assert.equal(result.status, 0, result.stderr);
+    await writeFile(join(root, 'next.txt'), 'safe change');
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'next.txt']).status, 0);
+    result = run('--staged', '--changed', '--exemptions', exemptionFile, root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.scanned, 1);
+    result = run('--staged', '--exemptions', exemptionFile, root);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).stats.exempted, 1);
+    await writeFile(join(root, 'historic.txt'), '\n' + secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'historic.txt']).status, 0);
+    result = run('--staged', '--changed', '--exemptions', exemptionFile, root);
+    assert.equal(result.status, 2);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(result.stderr.includes(secret), false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
