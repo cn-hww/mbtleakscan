@@ -38,6 +38,12 @@ fn aws_secret_body(unit : UInt16) -> Bool {
 }
 
 ///|
+fn aws_session_body(unit : UInt16) -> Bool {
+  let n = unit.to_int()
+  aws_secret_body(unit) || n == 45 || n == 95 || n == 61
+}
+
+///|
 fn horizontal_space(unit : UInt16) -> Bool {
   let n = unit.to_int()
   n == 32 || n == 9
@@ -121,16 +127,25 @@ fn scan_tokens(text : String) -> Array[Finding] {
 }
 
 ///|
-/// Match only values assigned to the documented AWS secret key setting.
-fn scan_aws_secret_assignments(text : String) -> Array[Finding] {
+/// Match only values assigned to documented AWS credential settings.
+fn scan_aws_assignments(text : String) -> Array[Finding] {
   let hits : Array[Finding] = []
   let units = text.code_units()
   let mut index = 0
   while index < text.length() {
     let mut key = ""
+    let mut rule = ""
     for candidate in ["aws_secret_access_key", "AWS_SECRET_ACCESS_KEY"] {
       if starts_at(text, index, candidate) {
         key = candidate
+        rule = "aws-secret-access-key"
+        break
+      }
+    }
+    for candidate in ["aws_session_token", "AWS_SESSION_TOKEN"] {
+      if starts_at(text, index, candidate) {
+        key = candidate
+        rule = "aws-session-token"
         break
       }
     }
@@ -163,15 +178,26 @@ fn scan_aws_secret_assignments(text : String) -> Array[Finding] {
       cursor += 1
     }
     let begin = cursor
-    while cursor < text.length() && aws_secret_body(units[cursor]) {
+    while cursor < text.length() &&
+          (if rule == "aws-session-token" {
+            aws_session_body(units[cursor])
+          } else {
+            aws_secret_body(units[cursor])
+          }) {
       cursor += 1
     }
-    if cursor - begin == 40 &&
+    let length = cursor - begin
+    let accepted = if rule == "aws-session-token" {
+      length >= 64 && length <= 8192
+    } else {
+      length == 40
+    }
+    if accepted &&
       (
         quote == 0 ||
         (cursor < text.length() && units[cursor].to_int() == quote)
       ) {
-      hits.push(finding("aws-secret-access-key", begin, 40))
+      hits.push(finding(rule, begin, length))
     }
     index = cursor + 1
   }

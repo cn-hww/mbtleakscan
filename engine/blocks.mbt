@@ -39,7 +39,7 @@ fn scan_blocks(text : String) -> Array[Finding] {
 ///|
 pub fn scan(text : String) -> Array[Finding] {
   let hits = scan_blocks(text)
-  let candidates = scan_aws_secret_assignments(text)
+  let candidates = scan_aws_assignments(text)
   for token in scan_tokens(text) {
     candidates.push(token)
   }

@@ -4,12 +4,16 @@ Find suspected credentials before code leaves your machine. The MoonBit engine
 returns rule names and positions, never the matched value.
 
 Current recognizers cover GitHub token prefixes, GitLab `glpat-` access tokens,
-AWS access key IDs, assigned AWS secret access keys, and PEM
+AWS access key IDs, assigned AWS secret access keys, assigned AWS session tokens,
+and PEM
 private-key blocks (including unclosed blocks). These
 are syntax-based candidates, not proof that a credential is valid. AWS access
 IDs are identifiers; the secret-key rule requires an
 `aws_secret_access_key` or `AWS_SECRET_ACCESS_KEY` assignment with a 40-character
 ASCII value. Other assignment names and encodings are outside this rule.
+The session-token rule checks `aws_session_token` or `AWS_SESSION_TOKEN` values
+with 64–8192 base64-like ASCII characters. This range is a scanner heuristic,
+not a claim that AWS tokens have a fixed format.
 GitLab recognition uses its default prefix and a 20-character ASCII body;
 installations with a custom prefix are outside this rule.
 

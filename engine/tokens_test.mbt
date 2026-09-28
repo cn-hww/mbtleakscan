@@ -89,3 +89,19 @@ test "many findings retain their own line and UTF-16 column" {
     assert_eq(hits[index].column, 4)
   }
 }
+
+///|
+test "redact assigned AWS session token candidates" {
+  let value = "aB3+/=_-".repeat(10)
+  let source = "AWS_SESSION_TOKEN=\"" + value + "\"\n"
+  let hits = @engine.scan(source)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "aws-session-token")
+  assert_eq(hits[0].length, 80)
+  assert_eq(@engine.redact(source), "AWS_SESSION_TOKEN=\"[REDACTED]\"\n")
+  assert_eq(@engine.report(source, []), "1:20 aws-session-token [REDACTED]\n")
+  assert_eq(@engine.scan("aws_session_token=" + "A".repeat(63)), [])
+  assert_eq(@engine.scan("aws_session_token=" + "A".repeat(8193)), [])
+  assert_eq(@engine.scan("not_aws_session_token=" + value), [])
+  assert_eq(@engine.scan("aws_session_token='" + value + "\n"), [])
+}
