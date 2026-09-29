@@ -11,6 +11,12 @@ function run(...args) {
   return spawnSync(process.execPath, [fileURLToPath(cli), ...args], { encoding: 'utf8' });
 }
 
+function runInput(input, ...args) {
+  return spawnSync(process.execPath, [fileURLToPath(cli), ...args], {
+    encoding: 'utf8', input,
+  });
+}
+
 test('reports positions in stable order without source values or absolute paths', async () => {
   const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
   const secret = 'ghp_' + 'a'.repeat(36);
@@ -303,4 +309,23 @@ test('history mode finds removed credentials and reports the commit without the 
     assert.equal(run('--max-commits', '2', root).status, 2);
     assert.equal(run('--history', '--max-commits', '0', root).status, 2);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('stdin mode scans bounded input without echoing it', () => {
+  const secret = 'ghp_' + 'a'.repeat(36);
+  let result = runInput('prefix ' + secret, '--stdin');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout.includes(secret), false);
+  assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['stdin']);
+  result = runInput('prefix ' + secret, '--stdin', '--sarif');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(JSON.parse(result.stdout).runs[0].results[0].locations[0]
+    .physicalLocation.artifactLocation.uri, 'stdin');
+  assert.equal(runInput('clean', '--stdin').status, 0);
+  assert.equal(runInput(Buffer.from([255]), '--stdin').status, 2);
+  result = runInput('x'.repeat(1025), '--stdin', '--max-bytes', '1024', '--fail-on-skip');
+  assert.equal(result.status, 2);
+  assert.equal(JSON.parse(result.stdout).stats.skipped, 1);
+  assert.equal(runInput('clean', '--stdin', '.').status, 2);
+  assert.equal(runInput('clean', '--stdin', '--tracked').status, 2);
 });

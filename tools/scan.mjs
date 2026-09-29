@@ -12,6 +12,7 @@ let tracked = false;
 let staged = false;
 let changed = false;
 let history = false;
+let stdin = false;
 let failOnSkip = false;
 let exemptionPath;
 let maxBytesOption;
@@ -23,6 +24,7 @@ for (let index = 0; index < args.length; index++) {
   else if (args[index] === '--staged') staged = true;
   else if (args[index] === '--changed') changed = true;
   else if (args[index] === '--history') history = true;
+  else if (args[index] === '--stdin') stdin = true;
   else if (args[index] === '--fail-on-skip') failOnSkip = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else if (args[index] === '--max-bytes') maxBytesOption = args[++index];
@@ -120,6 +122,25 @@ async function visitHistory() {
         }
       }
     }
+  } catch {
+    stats.errors++;
+  }
+}
+
+async function visitStdin() {
+  try {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of process.stdin) {
+      size += chunk.length;
+      if (size > limit) {
+        stats.skipped++;
+        stats.errors++;
+        return;
+      }
+      chunks.push(chunk);
+    }
+    scanBytes(Buffer.concat(chunks), 'stdin');
   } catch {
     stats.errors++;
   }
@@ -230,13 +251,13 @@ async function visitTracked() {
 if (!validMaxBytes || !validMaxCommits ||
     args.filter(arg => arg === '--max-bytes').length > 1 ||
     args.filter(arg => arg === '--max-commits').length > 1 ||
-    [tracked, staged, history].filter(Boolean).length > 1 ||
+    [tracked, staged, history, stdin].filter(Boolean).length > 1 ||
     changed && !staged || !history && maxCommitsOption !== undefined ||
-    history && exemptionPath ||
+    (history || stdin) && exemptionPath || stdin && paths.length > 0 ||
     paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--tracked | --staged [--changed] | --history [--max-commits 1..10000]] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--stdin | --tracked | --staged [--changed] | --history [--max-commits 1..10000]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
@@ -247,7 +268,8 @@ if (!validMaxBytes || !validMaxCommits ||
     process.exitCode = 2;
   }
   if (process.exitCode !== 2) {
-    if (history) await visitHistory();
+    if (stdin) await visitStdin();
+    else if (history) await visitHistory();
     else if (staged) await visitStaged();
     else if (tracked) await visitTracked();
     else await visit(root);

@@ -65,6 +65,7 @@ node tools/scan.mjs --staged path/to/git/repository
 node tools/scan.mjs --staged --changed path/to/git/repository
 node tools/scan.mjs --history path/to/git/repository
 node tools/scan.mjs --history --max-commits 200 path/to/git/repository
+git show HEAD:path/to/file | node tools/scan.mjs --stdin
 node tools/scan.mjs --staged --changed --fail-on-skip path/to/git/repository
 node tools/scan.mjs --max-bytes 2097152 path/to/project
 npm test
@@ -114,6 +115,12 @@ the location-based exemption file. SARIF results put the commit ID in `propertie
 Each distinct file version counts toward the scan summary.
 
 See [comparison with Gitleaks](COMPARISON.md) for the current feature boundary.
+
+`--stdin` scans UTF-8 input from a pipe and identifies the source as `stdin` in
+JSON or SARIF. The input is bounded by `--max-bytes`; an oversized stream fails
+with exit code 2. Stdin mode does not accept a path or an
+exemption file. Avoid putting actual secrets in shell command arguments or
+environment variables just to invoke this mode; pipe from the producing tool.
 
 Add `--changed` to scan only index paths changed from `HEAD`, using their staged
 content. This includes newly added files on a branch without commits and excludes
