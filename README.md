@@ -5,6 +5,7 @@ returns rule names and positions, never the matched value.
 
 Current recognizers cover GitHub token prefixes, GitLab `glpat-` access tokens,
 Stripe secret and restricted keys, Slack tokens,
+PyPI API token candidates and npm registry authToken assignments,
 AWS access key IDs, assigned AWS secret access keys, assigned AWS session tokens,
 passwords in URL userinfo, compact JWT candidates, and PEM private-key
 blocks (including unclosed blocks). These are syntax-based candidates, not
@@ -36,6 +37,12 @@ Stripe rules cover `sk_live_`, `sk_test_`, `rk_live_` and `rk_test_` with
 alphanumeric bodies of 20–256 characters. Publishable `pk_` keys are excluded.
 Slack rules cover segmented `xoxb-`, `xoxp-`, `xapp-` and `xwfp-` candidates.
 Both are syntax checks; the scanner does not contact either service.
+PyPI recognition follows its published `pypi-` prefix and 85-character minimum,
+with an 8192-character scanner limit. npm recognition checks 32–256 hexadecimal
+characters in an unquoted `//registry/.../:_authToken=` line; this size range is
+a scanner heuristic, not an official npm token length. Neither rule tests validity.
+Format references: [PyPI secret format](https://docs.pypi.org/api/secrets/) and
+[npm access tokens](https://docs.npmjs.com/about-access-tokens/).
 
 ```sh
 moon run trial --target wasm-gc

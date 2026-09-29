@@ -87,6 +87,30 @@ fn slack_key(text : String, units : ArrayView[UInt16], index : Int) -> Finding? 
 }
 
 ///|
+/// PyPI documents a pypi- prefix followed by at least 85 base64url characters.
+fn pypi_key(text : String, units : ArrayView[UInt16], index : Int) -> Finding? {
+  let prefix = "pypi-"
+  if !starts_at(text, index, prefix) {
+    return None
+  }
+  let mut end = index + prefix.length()
+  while end < text.length() &&
+        (
+          ascii_letter_or_digit(units[end]) ||
+          units[end].to_int() == 45 ||
+          units[end].to_int() == 95
+        ) {
+    end += 1
+  }
+  let size = end - index - prefix.length()
+  if size >= 85 && size <= 8192 && (end == text.length() || !word(units[end])) {
+    Some(finding("pypi-api-token", index, end - index))
+  } else {
+    None
+  }
+}
+
+///|
 /// Prefix rules are syntactic; they do not confirm an active provider key.
 fn scan_provider_keys(text : String) -> Array[Finding] {
   let hits : Array[Finding] = []
@@ -99,7 +123,11 @@ fn scan_provider_keys(text : String) -> Array[Finding] {
     }
     let hit = match stripe_key(text, units, index) {
       Some(value) => Some(value)
-      None => slack_key(text, units, index)
+      None =>
+        match slack_key(text, units, index) {
+          Some(value) => Some(value)
+          None => pypi_key(text, units, index)
+        }
     }
     match hit {
       Some(value) => {

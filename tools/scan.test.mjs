@@ -366,3 +366,15 @@ test('all-refs history finds an unmerged branch without exposing its value', asy
     assert.equal(run('--all-refs', root).status, 2);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('PyPI and npm registry candidates retain redacted CLI output', () => {
+  const pypi = 'pypi-' + 'Ab3_d-'.repeat(15);
+  const npm = 'a1b2c3d4'.repeat(5);
+  const result = runInput(`upload=${pypi}\n//registry.npmjs.org/:_authToken=${npm}`, '--stdin');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout.includes(pypi), false);
+  assert.equal(result.stdout.includes(npm), false);
+  assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.rule), [
+    'pypi-api-token', 'npm-auth-token',
+  ]);
+});

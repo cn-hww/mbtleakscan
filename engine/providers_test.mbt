@@ -28,3 +28,15 @@ test "detect segmented Slack tokens and reject fragments" {
   assert_eq(@engine.scan("xoxb-12345678-" + "a".repeat(20) + "-"), [])
   assert_eq(@engine.scan("xxoxb-12345678-" + "a".repeat(20)), [])
 }
+
+///|
+test "detect PyPI token candidates with documented prefix and minimum length" {
+  let token = "pypi-" + "Ab3_d-".repeat(15)
+  let hits = @engine.scan("upload=" + token)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "pypi-api-token")
+  assert_eq(@engine.redact("upload=" + token), "upload=[REDACTED]")
+  assert_eq(@engine.scan("pypi-" + "a".repeat(84)), [])
+  assert_eq(@engine.scan("x" + token), [])
+  assert_eq(@engine.scan(token + ".tail")[0].length, token.length())
+}

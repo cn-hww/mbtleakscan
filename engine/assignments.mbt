@@ -141,3 +141,46 @@ fn scan_assignments(text : String) -> Array[Finding] {
   }
   hits
 }
+
+///|
+fn ascii_hex(unit : UInt16) -> Bool {
+  let value = unit.to_int()
+  (value >= 48 && value <= 57) ||
+  (value >= 65 && value <= 70) ||
+  (value >= 97 && value <= 102)
+}
+
+///|
+/// npm documents hexadecimal access tokens in registry authToken settings.
+fn scan_npmrc_tokens(text : String) -> Array[Finding] {
+  let hits : Array[Finding] = []
+  let units = text.code_units()
+  let marker = ":_authToken="
+  let mut index = 0
+  let mut line_start = 0
+  while index < text.length() {
+    if units[index].to_int() == 10 {
+      line_start = index + 1
+    }
+    if starts_at(text, index, marker) &&
+      index > line_start + 2 &&
+      units[index - 1].to_int() == 47 &&
+      starts_at(text, line_start, "//") {
+      let begin = index + marker.length()
+      let mut end = begin
+      while end < text.length() && ascii_hex(units[end]) {
+        end += 1
+      }
+      let size = end - begin
+      if size >= 32 &&
+        size <= 256 &&
+        (end == text.length() || !word(units[end])) {
+        hits.push(finding("npm-auth-token", begin, size))
+      }
+      index = end
+    } else {
+      index += 1
+    }
+  }
+  hits
+}

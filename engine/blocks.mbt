@@ -55,6 +55,9 @@ pub fn scan(text : String) -> Array[Finding] {
   for candidate in scan_assignments(text) {
     candidates.push(candidate)
   }
+  for candidate in scan_npmrc_tokens(text) {
+    candidates.push(candidate)
+  }
   for token in candidates {
     let mut covered = false
     for existing in hits {

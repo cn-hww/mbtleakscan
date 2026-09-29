@@ -41,3 +41,23 @@ test "overlapping URL and provider matches remain one redacted span" {
   assert_eq(hits[0].rule, "url-password")
   assert_eq(@engine.redact(source), "https://user:[REDACTED]@host.example")
 }
+
+///|
+test "detect npm registry authToken without matching placeholders" {
+  let token = "a1b2c3d4".repeat(5)
+  let source = "//registry.npmjs.org/:_authToken=" + token
+  let hits = @engine.scan(source)
+  assert_eq(hits.length(), 1)
+  assert_eq(hits[0].rule, "npm-auth-token")
+  assert_eq(
+    @engine.redact(source),
+    "//registry.npmjs.org/:_authToken=[REDACTED]",
+  )
+  assert_eq(@engine.scan("//registry.npmjs.org/:_authToken=${NPM_TOKEN}"), [])
+  assert_eq(
+    @engine.scan("//registry.npmjs.org/:_authToken=" + "a".repeat(31)),
+    [],
+  )
+  assert_eq(@engine.scan("prefix:_authToken=" + token), [])
+  assert_eq(@engine.scan(source + "g"), [])
+}
