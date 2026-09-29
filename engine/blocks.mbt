@@ -52,11 +52,14 @@ pub fn scan(text : String) -> Array[Finding] {
   for token in scan_tokens(text) {
     candidates.push(token)
   }
+  for candidate in scan_assignments(text) {
+    candidates.push(candidate)
+  }
   for token in candidates {
     let mut covered = false
-    for block in hits {
-      if token.offset < block.offset + block.length &&
-        block.offset < token.offset + token.length {
+    for existing in hits {
+      if token.offset < existing.offset + existing.length &&
+        existing.offset < token.offset + token.length {
         covered = true
         break
       }

@@ -329,3 +329,13 @@ test('stdin mode scans bounded input without echoing it', () => {
   assert.equal(runInput('clean', '--stdin', '.').status, 2);
   assert.equal(runInput('clean', '--stdin', '--tracked').status, 2);
 });
+
+test('assigned credential findings pass through the CLI without the value', () => {
+  const value = 'Ab3dE4fG5hI6jK7lM8nP9qR0';
+  const result = runInput('API_KEY=' + value, '--stdin');
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.stdout.includes(value), false);
+  assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.rule), [
+    'assigned-credential',
+  ]);
+});

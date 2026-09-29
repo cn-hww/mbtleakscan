@@ -7,9 +7,16 @@ Current recognizers cover GitHub token prefixes, GitLab `glpat-` access tokens,
 Stripe secret and restricted keys, Slack tokens,
 AWS access key IDs, assigned AWS secret access keys, assigned AWS session tokens,
 passwords in URL userinfo, compact JWT candidates, and PEM private-key
-blocks (including unclosed blocks). These
-are syntax-based candidates, not proof that a credential is valid. AWS access
-IDs are identifiers; the secret-key rule requires an
+blocks (including unclosed blocks). These are syntax-based candidates, not
+proof that a credential is valid.
+
+The fallback assignment rule also checks long values assigned to common names
+such as `API_KEY`, `CLIENT_SECRET` and `PASSWORD` in env or JSON style text. It
+requires 24–512 allowed ASCII characters, letters, digits and at least eight
+distinct characters. It does not parse arbitrary expressions or validate the
+value; false positives are possible. Provider-specific rules take precedence.
+
+AWS access IDs are identifiers; the secret-key rule requires an
 `aws_secret_access_key` or `AWS_SECRET_ACCESS_KEY` assignment with a 40-character
 ASCII value. Other assignment names and encodings are outside this rule.
 The session-token rule checks `aws_session_token` or `AWS_SESSION_TOKEN` values

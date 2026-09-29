@@ -8,7 +8,7 @@ benchmark. mbtleakscan does not use or port Gitleaks code or its rule corpus.
 | --- | --- | --- |
 | Current files | Directory, tracked working-tree files, staged Git blobs and stdin | Directory and stdin scans |
 | Git history | Distinct file versions in the newest `HEAD`-reachable commits, with an explicit commit limit | Git patch history, with configurable `git log` options |
-| Rule coverage | A limited set of named provider, URL, JWT and PEM candidates | A larger default rule set and user-defined rules |
+| Rule coverage | Named provider, URL, JWT, PEM and conservative assigned-value candidates | A larger default rule set and user-defined rules |
 | Exceptions | Exact file/rule/line/column entries with reasons for current-file scans | Allowlists, ignore fingerprints and report baselines |
 | Reports | JSON and SARIF with rule, location and optional commit; no matched text field | JSON, CSV, JUnit, SARIF and templates; `--redact` is available |
 | Extra input handling | UTF-8 text files within a chosen size limit; binary and links are skipped | Optional encoded-text and archive scanning |
