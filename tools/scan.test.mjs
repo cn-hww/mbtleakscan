@@ -339,3 +339,30 @@ test('assigned credential findings pass through the CLI without the value', () =
     'assigned-credential',
   ]);
 });
+
+test('all-refs history finds an unmerged branch without exposing its value', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'glpat-' + 'a'.repeat(20);
+  const commit = message => spawnSync('git', ['-C', root, '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', message]);
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    await writeFile(join(root, 'base.txt'), 'clean');
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'base.txt']).status, 0);
+    assert.equal(commit('base').status, 0);
+    const branch = spawnSync('git', ['-C', root, 'branch', '--show-current'], {
+      encoding: 'utf8',
+    }).stdout.trim();
+    assert.equal(spawnSync('git', ['-C', root, 'switch', '-qc', 'side']).status, 0);
+    await writeFile(join(root, 'side.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'side.txt']).status, 0);
+    assert.equal(commit('side').status, 0);
+    assert.equal(spawnSync('git', ['-C', root, 'switch', '-q', branch]).status, 0);
+    assert.equal(run('--history', root).status, 0);
+    const result = run('--history', '--all-refs', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.deepEqual(JSON.parse(result.stdout).findings.map(hit => hit.file), ['side.txt']);
+    assert.equal(run('--all-refs', root).status, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

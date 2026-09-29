@@ -12,6 +12,7 @@ let tracked = false;
 let staged = false;
 let changed = false;
 let history = false;
+let allRefs = false;
 let stdin = false;
 let failOnSkip = false;
 let exemptionPath;
@@ -24,6 +25,7 @@ for (let index = 0; index < args.length; index++) {
   else if (args[index] === '--staged') staged = true;
   else if (args[index] === '--changed') changed = true;
   else if (args[index] === '--history') history = true;
+  else if (args[index] === '--all-refs') allRefs = true;
   else if (args[index] === '--stdin') stdin = true;
   else if (args[index] === '--fail-on-skip') failOnSkip = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
@@ -80,7 +82,7 @@ async function visitHistory() {
     const git = promisify(execFile);
     const options = { cwd: root, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 };
     const { stdout: rawCommits } = await git('git', [
-      'rev-list', '--max-count=' + (maxCommits + 1), 'HEAD',
+      'rev-list', '--max-count=' + (maxCommits + 1), allRefs ? '--all' : 'HEAD',
     ], options);
     const commits = decoder.decode(rawCommits).trim().split('\n').filter(Boolean);
     if (commits.length > maxCommits) {
@@ -252,12 +254,12 @@ if (!validMaxBytes || !validMaxCommits ||
     args.filter(arg => arg === '--max-bytes').length > 1 ||
     args.filter(arg => arg === '--max-commits').length > 1 ||
     [tracked, staged, history, stdin].filter(Boolean).length > 1 ||
-    changed && !staged || !history && maxCommitsOption !== undefined ||
+    changed && !staged || !history && (maxCommitsOption !== undefined || allRefs) ||
     (history || stdin) && exemptionPath || stdin && paths.length > 0 ||
     paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--stdin | --tracked | --staged [--changed] | --history [--max-commits 1..10000]] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--stdin | --tracked | --staged [--changed] | --history [--all-refs] [--max-commits 1..10000]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];

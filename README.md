@@ -72,6 +72,7 @@ node tools/scan.mjs --staged path/to/git/repository
 node tools/scan.mjs --staged --changed path/to/git/repository
 node tools/scan.mjs --history path/to/git/repository
 node tools/scan.mjs --history --max-commits 200 path/to/git/repository
+node tools/scan.mjs --history --all-refs path/to/git/repository
 git show HEAD:path/to/file | node tools/scan.mjs --stdin
 node tools/scan.mjs --staged --changed --fail-on-skip path/to/git/repository
 node tools/scan.mjs --max-bytes 2097152 path/to/project
@@ -120,6 +121,9 @@ the limit, the result is incomplete and exits 2 even when findings exist. This
 mode does not scan commits reachable only from other refs, and it does not accept
 the location-based exemption file. SARIF results put the commit ID in `properties`.
 Each distinct file version counts toward the scan summary.
+Add `--all-refs` to include commits reachable from local and remote-tracking refs
+known to the local clone; shallow or unfetched history is still outside coverage.
+The same commit limit applies across all selected refs.
 
 See [comparison with Gitleaks](COMPARISON.md) for the current feature boundary.
 
