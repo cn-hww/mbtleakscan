@@ -63,6 +63,8 @@ node tools/scan.mjs --exemptions exceptions.json path/to/project
 node tools/scan.mjs --tracked path/to/git/repository
 node tools/scan.mjs --staged path/to/git/repository
 node tools/scan.mjs --staged --changed path/to/git/repository
+node tools/scan.mjs --history path/to/git/repository
+node tools/scan.mjs --history --max-commits 200 path/to/git/repository
 node tools/scan.mjs --staged --changed --fail-on-skip path/to/git/repository
 node tools/scan.mjs --max-bytes 2097152 path/to/project
 npm test
@@ -99,6 +101,19 @@ requires a separate scan. Symbolic links remain skipped.
 or removed in the working tree after staging. It excludes untracked files and
 reports unresolved index entries as errors. Oversize and binary blobs are skipped
 and counted. `--tracked` and `--staged` are mutually exclusive.
+
+`--history` scans distinct regular-file versions reachable from `HEAD`, newest
+commits first. It finds credentials that have since been removed from current
+files. A finding includes a commit ID, relative file path and position, but no
+source value. Repeated appearances of the same file/blob pair are reported once,
+at the newest commit where that version occurs. The default limit is 50 commits;
+use `--max-commits` (up to 10000) to choose a larger window. If history exceeds
+the limit, the result is incomplete and exits 2 even when findings exist. This
+mode does not scan commits reachable only from other refs, and it does not accept
+the location-based exemption file. SARIF results put the commit ID in `properties`.
+Each distinct file version counts toward the scan summary.
+
+See [comparison with Gitleaks](COMPARISON.md) for the current feature boundary.
 
 Add `--changed` to scan only index paths changed from `HEAD`, using their staged
 content. This includes newly added files on a branch without commits and excludes

@@ -11,18 +11,22 @@ let sarif = false;
 let tracked = false;
 let staged = false;
 let changed = false;
+let history = false;
 let failOnSkip = false;
 let exemptionPath;
 let maxBytesOption;
+let maxCommitsOption;
 const paths = [];
 for (let index = 0; index < args.length; index++) {
   if (args[index] === '--sarif') sarif = true;
   else if (args[index] === '--tracked') tracked = true;
   else if (args[index] === '--staged') staged = true;
   else if (args[index] === '--changed') changed = true;
+  else if (args[index] === '--history') history = true;
   else if (args[index] === '--fail-on-skip') failOnSkip = true;
   else if (args[index] === '--exemptions') exemptionPath = args[++index];
   else if (args[index] === '--max-bytes') maxBytesOption = args[++index];
+  else if (args[index] === '--max-commits') maxCommitsOption = args[++index];
   else paths.push(args[index]);
 }
 const validMaxBytes = !args.includes('--max-bytes') ||
@@ -30,6 +34,10 @@ const validMaxBytes = !args.includes('--max-bytes') ||
   Number.isSafeInteger(Number(maxBytesOption)) &&
   Number(maxBytesOption) <= 8 * 1024 * 1024;
 if (validMaxBytes && maxBytesOption !== undefined) limit = Number(maxBytesOption);
+const validMaxCommits = !args.includes('--max-commits') ||
+  typeof maxCommitsOption === 'string' && /^[1-9][0-9]*$/.test(maxCommitsOption) &&
+  Number.isSafeInteger(Number(maxCommitsOption)) && Number(maxCommitsOption) <= 10000;
+const maxCommits = Number(maxCommitsOption ?? 50);
 const root = resolve(paths[0] ?? '.');
 const findings = [];
 const stats = { scanned: 0, skipped: 0, errors: 0 };
@@ -55,11 +63,66 @@ async function loadExemptions(path) {
   return data.exemptions;
 }
 
-function scanBytes(bytes, file) {
+function scanBytes(bytes, file, commit) {
   if (bytes.length > limit || bytes.includes(0)) { stats.skipped++; return; }
   const source = decoder.decode(bytes);
-  for (const hit of JSON.parse(scan_json(source))) findings.push({ file, ...hit });
+  for (const hit of JSON.parse(scan_json(source))) {
+    findings.push(commit ? { file, commit, ...hit } : { file, ...hit });
+  }
   stats.scanned++;
+}
+
+async function visitHistory() {
+  try {
+    if (!(await lstat(root)).isDirectory()) throw Error();
+    const git = promisify(execFile);
+    const options = { cwd: root, encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 };
+    const { stdout: rawCommits } = await git('git', [
+      'rev-list', '--max-count=' + (maxCommits + 1), 'HEAD',
+    ], options);
+    const commits = decoder.decode(rawCommits).trim().split('\n').filter(Boolean);
+    if (commits.length > maxCommits) {
+      stats.errors++;
+      process.stderr.write('History limit reached; increase --max-commits\n');
+      commits.length = maxCommits;
+    }
+    const seen = new Set();
+    for (const commit of commits) {
+      if (!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(commit)) throw Error();
+      const { stdout: rawTree } = await git('git', ['ls-tree', '-r', '-z', commit], options);
+      const entries = decoder.decode(rawTree).split('\0').filter(Boolean).sort();
+      for (const entry of entries) {
+        try {
+          const tab = entry.indexOf('\t');
+          if (tab < 0) throw Error();
+          const [mode, type, hash] = entry.slice(0, tab).split(' ');
+          const file = entry.slice(tab + 1);
+          if (!/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(hash) || !file ||
+              file.startsWith('/') || file.split('/').some(part =>
+                !part || part === '.' || part === '..' || part.includes('\\'))) throw Error();
+          if (type !== 'blob' || mode !== '100644' && mode !== '100755') {
+            stats.skipped++;
+            continue;
+          }
+          const key = JSON.stringify([file, hash]);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const { stdout: sizeText } = await git('git', ['cat-file', '-s', hash], { cwd: root });
+          const size = Number(sizeText.trim());
+          if (!Number.isSafeInteger(size) || size < 0) throw Error();
+          if (size > limit) { stats.skipped++; continue; }
+          const { stdout: bytes } = await git('git', ['cat-file', 'blob', hash], {
+            cwd: root, encoding: 'buffer', maxBuffer: limit + 1024,
+          });
+          scanBytes(bytes, file, commit);
+        } catch {
+          stats.errors++;
+        }
+      }
+    }
+  } catch {
+    stats.errors++;
+  }
 }
 
 async function visit(path, allowDirectory = true) {
@@ -164,11 +227,16 @@ async function visitTracked() {
   }
 }
 
-if (!validMaxBytes || args.filter(arg => arg === '--max-bytes').length > 1 ||
-    tracked && staged || changed && !staged || paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
+if (!validMaxBytes || !validMaxCommits ||
+    args.filter(arg => arg === '--max-bytes').length > 1 ||
+    args.filter(arg => arg === '--max-commits').length > 1 ||
+    [tracked, staged, history].filter(Boolean).length > 1 ||
+    changed && !staged || !history && maxCommitsOption !== undefined ||
+    history && exemptionPath ||
+    paths.length > 1 || paths.some(arg => arg.startsWith('--')) ||
     (args.includes('--exemptions') && (!exemptionPath || exemptionPath.startsWith('--'))) ||
     args.filter(arg => arg === '--exemptions').length > 1) {
-  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--tracked | --staged [--changed]] [--exemptions file.json] [directory-or-file]\n');
+  process.stderr.write('Usage: node tools/scan.mjs [--sarif] [--fail-on-skip] [--max-bytes 1..8388608] [--tracked | --staged [--changed] | --history [--max-commits 1..10000]] [--exemptions file.json] [directory-or-file]\n');
   process.exitCode = 2;
 } else {
   let exemptions = [];
@@ -179,7 +247,8 @@ if (!validMaxBytes || args.filter(arg => arg === '--max-bytes').length > 1 ||
     process.exitCode = 2;
   }
   if (process.exitCode !== 2) {
-    if (staged) await visitStaged();
+    if (history) await visitHistory();
+    else if (staged) await visitStaged();
     else if (tracked) await visitTracked();
     else await visit(root);
   }
@@ -208,6 +277,7 @@ if (!validMaxBytes || args.filter(arg => arg === '--max-bytes').length > 1 ||
         ruleId: hit.rule,
         level: 'warning',
         message: { text: 'Suspected credential [REDACTED]' },
+        ...(hit.commit ? { properties: { commit: hit.commit } } : {}),
         locations: [{ physicalLocation: {
           artifactLocation: { uri: hit.file },
           region: { startLine: hit.line, startColumn: hit.column },

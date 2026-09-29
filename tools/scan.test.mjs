@@ -269,3 +269,38 @@ test('new engine rules pass through the CLI without exposing values', async () =
     ]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('history mode finds removed credentials and reports the commit without the value', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'scan-fixture-'));
+  const secret = 'ghp_' + 'a'.repeat(36);
+  const commit = message => spawnSync('git', ['-C', root, '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', message]);
+  try {
+    assert.equal(spawnSync('git', ['init', '-q', root]).status, 0);
+    await writeFile(join(root, 'config.txt'), secret);
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'config.txt']).status, 0);
+    assert.equal(commit('add synthetic value').status, 0);
+    const first = spawnSync('git', ['-C', root, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+    await writeFile(join(root, 'config.txt'), 'clean');
+    assert.equal(spawnSync('git', ['-C', root, 'add', 'config.txt']).status, 0);
+    assert.equal(commit('remove synthetic value').status, 0);
+    assert.equal(run(root).status, 0);
+    const result = run('--history', root);
+    assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.stdout.includes(secret), false);
+    assert.equal(result.stdout.includes(root), false);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.findings.length, 1);
+    assert.equal(report.findings[0].file, 'config.txt');
+    assert.equal(report.findings[0].commit, first);
+    assert.deepEqual(report.stats, { scanned: 2, skipped: 0, errors: 0, exempted: 0 });
+    const sarif = JSON.parse(run('--history', '--sarif', root).stdout);
+    assert.equal(sarif.runs[0].results[0].properties.commit, first);
+    const truncated = run('--history', '--max-commits', '1', root);
+    assert.equal(truncated.status, 2);
+    assert.equal(JSON.parse(truncated.stdout).stats.errors, 1);
+    assert.equal(run('--history', '--staged', root).status, 2);
+    assert.equal(run('--max-commits', '2', root).status, 2);
+    assert.equal(run('--history', '--max-commits', '0', root).status, 2);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
